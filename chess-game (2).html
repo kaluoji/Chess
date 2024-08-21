@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Ajedrez</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            grid-template-rows: repeat(8, 50px);
+            border: 2px solid #333;
+        }
+        .square {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            cursor: pointer;
+        }
+        .white {
+            background-color: #f0d9b5;
+        }
+        .black {
+            background-color: #b58863;
+        }
+        .highlight {
+            background-color: rgba(255, 255, 0, 0.5);
+        }
+        #timer-container {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-top: 20px;
+        }
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="chess-board"></div>
+        <div id="timer-container">
+            <div id="white-timer" class="timer">05:00</div>
+            <div id="black-timer" class="timer">05:00</div>
+        </div>
+    </div>
+
+    <script>
+        const board = document.getElementById('chess-board');
+        const whiteTimer = document.getElementById('white-timer');
+        const blackTimer = document.getElementById('black-timer');
+        let selectedPiece = null;
+        let currentPlayer = 'white';
+        let whiteTime = 300; // 5 minutes in seconds
+        let blackTime = 300;
+        let timerInterval;
+
+        const initialBoard = [
+            ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜'],
+            ['♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙'],
+            ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖']
+        ];
+
+        function createBoard() {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square', (row + col) % 2 === 0 ? 'white' : 'black');
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    square.textContent = initialBoard[row][col];
+                    square.addEventListener('click', handleSquareClick);
+                    board.appendChild(square);
+                }
+            }
+        }
+
+        function handleSquareClick(event) {
+            const clickedSquare = event.target;
+            const row = parseInt(clickedSquare.dataset.row);
+            const col = parseInt(clickedSquare.dataset.col);
+
+            if (selectedPiece) {
+                const startRow = parseInt(selectedPiece.dataset.row);
+                const startCol = parseInt(selectedPiece.dataset.col);
+
+                if (isValidMove(startRow, startCol, row, col)) {
+                    movePiece(selectedPiece, clickedSquare);
+                    switchPlayer();
+                }
+
+                clearHighlights();
+                selectedPiece = null;
+            } else if (clickedSquare.textContent && isPieceOfCurrentPlayer(clickedSquare.textContent)) {
+                selectedPiece = clickedSquare;
+                highlightValidMoves(row, col);
+            }
+        }
+
+        function isPieceOfCurrentPlayer(piece) {
+            return (currentPlayer === 'white' && piece.charCodeAt(0) >= 9812 && piece.charCodeAt(0) <= 9817) ||
+                   (currentPlayer === 'black' && piece.charCodeAt(0) >= 9818 && piece.charCodeAt(0) <= 9823);
+        }
+
+        function isValidMove(startRow, startCol, endRow, endCol) {
+            const piece = board.children[startRow * 8 + startCol].textContent;
+            const targetPiece = board.children[endRow * 8 + endCol].textContent;
+
+            if (targetPiece && isPieceOfCurrentPlayer(targetPiece)) {
+                return false;
+            }
+
+            switch (piece.toLowerCase()) {
+                case '♙':
+                case '♟':
+                    return isValidPawnMove(startRow, startCol, endRow, endCol);
+                case '♖':
+                case '♜':
+                    return isValidRookMove(startRow, startCol, endRow, endCol);
+                case '♘':
+                case '♞':
+                    return isValidKnightMove(startRow, startCol, endRow, endCol);
+                case '♗':
+                case '♝':
+                    return isValidBishopMove(startRow, startCol, endRow, endCol);
+                case '♕':
+                case '♛':
+                    return isValidQueenMove(startRow, startCol, endRow, endCol);
+                case '♔':
+                case '♚':
+                    return isValidKingMove(startRow, startCol, endRow, endCol);
+                default:
+                    return false;
+            }
+        }
+
+        function isValidPawnMove(startRow, startCol, endRow, endCol) {
+            const direction = currentPlayer === 'white' ? -1 : 1;
+            const startingRow = currentPlayer === 'white' ? 6 : 1;
+
+            if (startCol === endCol && board.children[endRow * 8 + endCol].textContent === '') {
+                if (endRow === startRow + direction) {
+                    return true;
+                }
+                if (startRow === startingRow && endRow === startRow + 2 * direction && board.children[(startRow + direction) * 8 + startCol].textContent === '') {
+                    return true;
+                }
+            }
+
+            if (Math.abs(startCol - endCol) === 1 && endRow === startRow + direction) {
+                const targetPiece = board.children[endRow * 8 + endCol].textContent;
+                return targetPiece !== '' && !isPieceOfCurrentPlayer(targetPiece);
+            }
+
+            return false;
+        }
+
+        function isValidRookMove(startRow, startCol, endRow, endCol) {
+            if (startRow !== endRow && startCol !== endCol) {
+                return false;
+            }
+
+            const rowStep = startRow === endRow ? 0 : (endRow - startRow) / Math.abs(endRow - startRow);
+            const colStep = startCol === endCol ? 0 : (endCol - startCol) / Math.abs(endCol - startCol);
+
+            for (let i = 1; i < Math.max(Math.abs(endRow - startRow), Math.abs(endCol - startCol)); i++) {
+                if (board.children[(startRow + i * rowStep) * 8 + (startCol + i * colStep)].textContent !== '') {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        function isValidKnightMove(startRow, startCol, endRow, endCol) {
+            const rowDiff = Math.abs(endRow - startRow);
+            const colDiff = Math.abs(endCol - startCol);
+            return (rowDiff === 2 && colDiff === 1) || (rowDiff === 1 && colDiff === 2);
+        }
+
+        function isValidBishopMove(startRow, startCol, endRow, endCol) {
+            if (Math.abs(endRow - startRow) !== Math.abs(endCol - startCol)) {
+                return false;
+            }
+
+            const rowStep = (endRow - startRow) / Math.abs(endRow - startRow);
+            const colStep = (endCol - startCol) / Math.abs(endCol - startCol);
+
+            for (let i = 1; i < Math.abs(endRow - startRow); i++) {
+                if (board.children[(startRow + i * rowStep) * 8 + (startCol + i * colStep)].textContent !== '') {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        function isValidQueenMove(startRow, startCol, endRow, endCol) {
+            return isValidRookMove(startRow, startCol, endRow, endCol) || isValidBishopMove(startRow, startCol, endRow, endCol);
+        }
+
+        function isValidKingMove(startRow, startCol, endRow, endCol) {
+            const rowDiff = Math.abs(endRow - startRow);
+            const colDiff = Math.abs(endCol - startCol);
+            return rowDiff <= 1 && colDiff <= 1;
+        }
+
+        function movePiece(fromSquare, toSquare) {
+            toSquare.textContent = fromSquare.textContent;
+            fromSquare.textContent = '';
+        }
+
+        function switchPlayer() {
+            currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+            clearInterval(timerInterval);
+            startTimer();
+        }
+
+        function highlightValidMoves(row, col) {
+            clearHighlights();
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (isValidMove(row, col, i, j)) {
+                        board.children[i * 8 + j].classList.add('highlight');
+                    }
+                }
+            }
+        }
+
+        function clearHighlights() {
+            const squares = board.getElementsByClassName('square');
+            for (let square of squares) {
+                square.classList.remove('highlight');
+            }
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                if (currentPlayer === 'white') {
+                    whiteTime--;
+                    whiteTimer.textContent = formatTime(whiteTime);
+                } else {
+                    blackTime--;
+                    blackTimer.textContent = formatTime(blackTime);
+                }
+
+                if (whiteTime === 0 || blackTime === 0) {
+                    clearInterval(timerInterval);
+                    alert(`¡Tiempo agotado! ${currentPlayer === 'white' ? 'Negras' : 'Blancas'} ganan.`);
+                }
+            }, 1000);
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        createBoard();
+        startTimer();
+    </script>
+</body>
+</html>
